@@ -51,7 +51,7 @@ def parse_args() -> None:
 	program.add_argument('--output-video-encoder', help = wording.get('output_video_encoder_help'), dest = 'output_video_encoder', default = 'libx264', choices = facefusion.choices.output_video_encoder)
 	program.add_argument('--output-video-quality', help = wording.get('output_video_quality_help'), dest = 'output_video_quality', type = int, default = 90, choices = range(101), metavar = '[0-100]')
 	program.add_argument('--max-memory', help = wording.get('max_memory_help'), dest = 'max_memory', type = int)
-	program.add_argument('--execution-providers', help = wording.get('execution_providers_help').format(choices = 'cpu'), dest = 'execution_providers', default = ['cpu'], choices = suggest_execution_providers_choices(), nargs='+')
+	program.add_argument('--execution-providers', help = wording.get('execution_providers_help').format(choices = 'cpu'), dest = 'execution_providers', default = ['cuda'], choices = suggest_execution_providers_choices(), nargs='+')
 	program.add_argument('--execution-thread-count', help = wording.get('execution_thread_count_help'), dest = 'execution_thread_count', type = int, default = suggest_execution_thread_count_default())
 	program.add_argument('--execution-queue-count', help = wording.get('execution_queue_count_help'), dest = 'execution_queue_count', type = int, default = 1)
 	program.add_argument('-v', '--version', action='version', version = metadata.get('name') + ' ' + metadata.get('version'))
@@ -92,7 +92,7 @@ def suggest_execution_providers_choices() -> List[str]:
 
 def suggest_execution_thread_count_default() -> int:
 	if 'CUDAExecutionProvider' in onnxruntime.get_available_providers():
-		return 8
+		return 4
 	return 1
 
 
