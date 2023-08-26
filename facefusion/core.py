@@ -132,8 +132,8 @@ def pre_check() -> bool:
 
 
 def process_image() -> None:
-	if predict_image(facefusion.globals.target_path):
-		return
+	#if predict_image(facefusion.globals.target_path):
+	#	return
 	shutil.copy2(facefusion.globals.target_path, facefusion.globals.output_path)
 	# process frame
 	for frame_processor_module in get_frame_processors_modules(facefusion.globals.frame_processors):
@@ -148,8 +148,8 @@ def process_image() -> None:
 
 
 def process_video() -> None:
-	if predict_video(facefusion.globals.target_path):
-		return
+	#if predict_video(facefusion.globals.target_path):
+	#	return
 	fps = detect_fps(facefusion.globals.target_path) if facefusion.globals.keep_fps else 25.0
 	update_status(wording.get('creating_temp'))
 	create_temp(facefusion.globals.target_path)
