@@ -1,4 +1,3 @@
-import json
 from typing import List, Optional
 from pathlib import Path
 from tqdm import tqdm
@@ -15,6 +14,7 @@ import onnxruntime
 
 import facefusion.globals
 from facefusion import wording
+from facefusion.vision import detect_fps
 
 TEMP_DIRECTORY_PATH = os.path.join(tempfile.gettempdir(), 'facefusion')
 TEMP_OUTPUT_NAME = 'temp.mp4'
@@ -40,25 +40,12 @@ def open_ffmpeg(args : List[str]) -> subprocess.Popen[bytes]:
 	return subprocess.Popen(commands, stdin = subprocess.PIPE)
 
 
-def detect_fps(target_path : str) -> Optional[float]:
-	commands = [ 'ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate', '-of', 'json', target_path ]
-	output = subprocess.check_output(commands).decode().strip()
-	try:
-		entries = json.loads(output)
-		for stream in entries.get('streams'):
-			numerator, denominator = map(int, stream.get('r_frame_rate').split('/'))
-			return numerator / denominator
-		return None
-	except (ValueError, ZeroDivisionError):
-		return None
-
-
 def extract_frames(target_path : str, fps : float) -> bool:
 	temp_directory_path = get_temp_directory_path(target_path)
 	temp_frame_compression = round(31 - (facefusion.globals.temp_frame_quality * 0.31))
 	trim_frame_start = facefusion.globals.trim_frame_start
 	trim_frame_end = facefusion.globals.trim_frame_end
-	commands = [ '-hwaccel', 'auto', '-i', target_path, '-q:v', str(temp_frame_compression), '-pix_fmt', 'rgb24' ]
+	commands = [ '-hwaccel', 'auto', '-i', target_path, '-q:v', str(temp_frame_compression), '-pix_fmt', 'rgb24', '-map', '0:v:0' ]
 	if trim_frame_start is not None and trim_frame_end is not None:
 		commands.extend([ '-vf', 'trim=start_frame=' + str(trim_frame_start) + ':end_frame=' + str(trim_frame_end) + ',fps=' + str(fps) ])
 	elif trim_frame_start is not None:
@@ -67,7 +54,7 @@ def extract_frames(target_path : str, fps : float) -> bool:
 		commands.extend([ '-vf', 'trim=end_frame=' + str(trim_frame_end) + ',fps=' + str(fps) ])
 	else:
 		commands.extend([ '-vf', 'fps=' + str(fps) ])
-	commands.extend([os.path.join(temp_directory_path, '%04d.' + facefusion.globals.temp_frame_format)])
+	commands.extend([ os.path.join(temp_directory_path, '%04d.' + facefusion.globals.temp_frame_format) ])
 	return run_ffmpeg(commands)
 
 
