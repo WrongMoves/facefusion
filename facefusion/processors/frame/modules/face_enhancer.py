@@ -1,4 +1,4 @@
-from typing import Any, List, Callable
+from typing import Any, List
 import threading
 from gfpgan.utils import GFPGANer
 
@@ -6,8 +6,8 @@ import facefusion.globals
 from facefusion import wording, utilities
 from facefusion.core import update_status
 from facefusion.face_analyser import get_many_faces, clear_face_analyser
-from facefusion.typing import Frame, Face, ProcessMode
-from facefusion.utilities import conditional_download, resolve_relative_path, is_image, is_video, is_download_done
+from facefusion.typing import Frame, Face, Update_Process, ProcessMode
+from facefusion.utilities import conditional_download, resolve_relative_path, is_image, is_video, is_file, is_download_done
 from facefusion.vision import read_image, read_static_image, write_image
 
 FRAME_PROCESSOR = None
@@ -38,14 +38,18 @@ def clear_frame_processor() -> None:
 
 
 def pre_check() -> bool:
-	download_directory_path = resolve_relative_path('../.assets/models')
-	conditional_download(download_directory_path, [ MODEL_URL ])
+	if not facefusion.globals.skip_download:
+		download_directory_path = resolve_relative_path('../.assets/models')
+		conditional_download(download_directory_path, [ MODEL_URL ])
 	return True
 
 
 def pre_process(mode : ProcessMode) -> bool:
 	if not is_download_done(MODEL_URL, MODEL_PATH):
 		update_status(wording.get('model_download_not_done') + wording.get('exclamation_mark'), NAME)
+		return False
+	elif not is_file(MODEL_PATH):
+		update_status(wording.get('model_file_not_present') + wording.get('exclamation_mark'), NAME)
 		return False
 	if mode in [ 'output', 'preview' ] and not is_image(facefusion.globals.target_path) and not is_video(facefusion.globals.target_path):
 		update_status(wording.get('select_image_or_video_target') + wording.get('exclamation_mark'), NAME)
@@ -89,7 +93,7 @@ def process_frame(source_face : Face, reference_face : Face, temp_frame : Frame)
 	return temp_frame
 
 
-def process_frames(source_path : str, temp_frame_paths : List[str], update_progress: Callable[[], None]) -> None:
+def process_frames(source_path : str, temp_frame_paths : List[str], update_progress : Update_Process) -> None:
 	for temp_frame_path in temp_frame_paths:
 		temp_frame = read_image(temp_frame_path)
 		result_frame = process_frame(None, None, temp_frame)
