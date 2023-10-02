@@ -17,6 +17,10 @@ FRAME_PROCESSORS_METHODS =\
 [
 	'get_frame_processor',
 	'clear_frame_processor',
+	'get_options',
+	'set_options',
+	'register_args',
+	'apply_args',
 	'pre_check',
 	'pre_process',
 	'process_frame',
