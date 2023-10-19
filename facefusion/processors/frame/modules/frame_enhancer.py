@@ -8,10 +8,10 @@ from realesrgan import RealESRGANer
 import facefusion.globals
 import facefusion.processors.frame.core as frame_processors
 from facefusion import wording
-from facefusion.core import update_status
 from facefusion.face_analyser import clear_face_analyser
+from facefusion.predictor import clear_predictor
 from facefusion.typing import Frame, Face, Update_Process, ProcessMode, ModelValue, OptionsWithModel
-from facefusion.utilities import conditional_download, resolve_relative_path, is_file, is_download_done, get_device
+from facefusion.utilities import conditional_download, resolve_relative_path, is_file, is_download_done, map_device, update_status
 from facefusion.vision import read_image, read_static_image, write_image
 from facefusion.processors.frame import globals as frame_processors_globals
 from facefusion.processors.frame import choices as frame_processors_choices
@@ -22,17 +22,22 @@ THREAD_LOCK : threading.Lock = threading.Lock()
 NAME = 'FACEFUSION.FRAME_PROCESSOR.FRAME_ENHANCER'
 MODELS: Dict[str, ModelValue] =\
 {
-	'RealESRGAN_x2plus':
+	'realesrgan_x2plus':
 	{
 		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/RealESRGAN_x2plus.pth',
 		'path': resolve_relative_path('../.assets/models/RealESRGAN_x2plus.pth'),
 		'scale': 2
-
 	},
-	'RealESRGAN_x4plus':
+	'realesrgan_x4plus':
 	{
 		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/RealESRGAN_x4plus.pth',
 		'path': resolve_relative_path('../.assets/models/RealESRGAN_x4plus.pth'),
+		'scale': 4
+	},
+	'realesrnet_x4plus':
+	{
+		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/RealESRNet_x4plus.pth',
+		'path': resolve_relative_path('../.assets/models/RealESRNet_x4plus.pth'),
 		'scale': 4
 	}
 }
@@ -53,7 +58,7 @@ def get_frame_processor() -> Any:
 					num_out_ch = 3,
 					scale = model_scale
 				),
-				device = get_device(facefusion.globals.execution_providers),
+				device = map_device(facefusion.globals.execution_providers),
 				scale = model_scale
 			)
 	return FRAME_PROCESSOR
@@ -69,7 +74,7 @@ def get_options(key : Literal[ 'model' ]) -> Any:
 	global OPTIONS
 
 	if OPTIONS is None:
-		OPTIONS = \
+		OPTIONS =\
 		{
 			'model': MODELS[frame_processors_globals.frame_enhancer_model]
 		}
@@ -83,7 +88,7 @@ def set_options(key : Literal[ 'model' ], value : Any) -> None:
 
 
 def register_args(program : ArgumentParser) -> None:
-	program.add_argument('--frame-enhancer-model', help = wording.get('frame_processor_model_help'), dest = 'frame_enhancer_model', default = 'RealESRGAN_x2plus', choices = frame_processors_choices.frame_enhancer_models)
+	program.add_argument('--frame-enhancer-model', help = wording.get('frame_processor_model_help'), dest = 'frame_enhancer_model', default = 'realesrgan_x2plus', choices = frame_processors_choices.frame_enhancer_models)
 	program.add_argument('--frame-enhancer-blend', help = wording.get('frame_processor_blend_help'), dest = 'frame_enhancer_blend', type = int, default = 100, choices = range(101), metavar = '[0-100]')
 
 
@@ -119,15 +124,21 @@ def pre_process(mode : ProcessMode) -> bool:
 def post_process() -> None:
 	clear_frame_processor()
 	clear_face_analyser()
+	clear_predictor()
 	read_static_image.cache_clear()
 
 
 def enhance_frame(temp_frame : Frame) -> Frame:
 	with THREAD_SEMAPHORE:
-		frame_enhancer_blend = 1 - (frame_processors_globals.frame_enhancer_blend / 100)
 		paste_frame, _ = get_frame_processor().enhance(temp_frame)
-		temp_frame = cv2.resize(temp_frame, (paste_frame.shape[1], paste_frame.shape[0]))
-		temp_frame = cv2.addWeighted(temp_frame, frame_enhancer_blend, paste_frame, 1 - frame_enhancer_blend, 0)
+		temp_frame = blend_frame(temp_frame, paste_frame)
+	return temp_frame
+
+
+def blend_frame(temp_frame : Frame, paste_frame : Frame) -> Frame:
+	frame_enhancer_blend = 1 - (frame_processors_globals.frame_enhancer_blend / 100)
+	temp_frame = cv2.resize(temp_frame, (paste_frame.shape[1], paste_frame.shape[0]))
+	temp_frame = cv2.addWeighted(temp_frame, frame_enhancer_blend, paste_frame, 1 - frame_enhancer_blend, 0)
 	return temp_frame
 
 

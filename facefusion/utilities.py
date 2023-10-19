@@ -10,7 +10,7 @@ import shutil
 import ssl
 import subprocess
 import tempfile
-import urllib
+import urllib.request
 import onnxruntime
 
 import facefusion.globals
@@ -198,7 +198,7 @@ def conditional_download(download_directory_path : str, urls : List[str]) -> Non
 @lru_cache(maxsize = None)
 def get_download_size(url : str) -> int:
 	try:
-		response = urllib.request.urlopen(url) # type: ignore[attr-defined]
+		response = urllib.request.urlopen(url)
 		return int(response.getheader('Content-Length'))
 	except (OSError, ValueError):
 		return 0
@@ -231,9 +231,15 @@ def decode_execution_providers(execution_providers: List[str]) -> List[str]:
 	return [ execution_provider for execution_provider, encoded_execution_provider in zip(available_execution_providers, encoded_execution_providers) if any(execution_provider in encoded_execution_provider for execution_provider in execution_providers) ]
 
 
-def get_device(execution_providers : List[str]) -> str:
-	if 'CUDAExecutionProvider' in execution_providers:
-		return 'cuda'
+def map_device(execution_providers : List[str]) -> str:
 	if 'CoreMLExecutionProvider' in execution_providers:
 		return 'mps'
+	if 'CUDAExecutionProvider' in execution_providers or 'ROCMExecutionProvider' in execution_providers :
+		return 'cuda'
+	if 'OpenVINOExecutionProvider' in execution_providers:
+		return 'mkl'
 	return 'cpu'
+
+
+def update_status(message : str, scope : str = 'FACEFUSION.CORE') -> None:
+	print('[' + scope + '] ' + message)

@@ -1,8 +1,8 @@
 import gradio
 
 import facefusion.globals
-from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, limit_resources, benchmark_options, benchmark
 from facefusion.utilities import conditional_download
+from facefusion.uis.components import about, frame_processors, frame_processors_options, execution, execution_thread_count, execution_queue_count, limit_resources, benchmark_options, benchmark
 
 
 def pre_check() -> bool:
@@ -56,10 +56,8 @@ def listen() -> None:
 	execution_thread_count.listen()
 	execution_queue_count.listen()
 	limit_resources.listen()
-	benchmark_options.listen()
 	benchmark.listen()
 
 
 def run(ui : gradio.Blocks) -> None:
-	ui.queue(concurrency_count = 2, api_open = False)
-	ui.launch(show_api = False)
+	ui.queue(concurrency_count = 2, api_open = False).launch(show_api = False)
