@@ -2,9 +2,8 @@
 .idea
 .vscode
 .vs/VSWorkspaceState.json
-.vs/facefusion/FileContentIndex/0c52656d-33ee-4bbf-846b-121a0bb80708.vsidx
+.vs/*
 *.vsidx
-.vs/facefusion/FileContentIndex/read.lock
-.vs/facefusion/v17/.wsuo
-.vs/facefusion/v17/workspaceFileList.bin
-.vs/slnx.sqlite
+facefusion/**/__pycache__
+venv/LIb/*
+venv/*
