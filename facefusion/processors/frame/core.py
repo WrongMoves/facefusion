@@ -1,21 +1,25 @@
-import os
 import sys
 import importlib
-import psutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from queue import Queue
 from types import ModuleType
-from typing import Any, List, Callable
+from typing import Any, List
 from tqdm import tqdm
 
 import facefusion.globals
+from facefusion.typing import Process_Frames
 from facefusion import wording
+from facefusion.utilities import encode_execution_providers
 
 FRAME_PROCESSORS_MODULES : List[ModuleType] = []
 FRAME_PROCESSORS_METHODS =\
 [
 	'get_frame_processor',
 	'clear_frame_processor',
+	'get_options',
+	'set_options',
+	'register_args',
+	'apply_args',
 	'pre_check',
 	'pre_process',
 	'process_frame',
@@ -57,16 +61,24 @@ def clear_frame_processors_modules() -> None:
 	FRAME_PROCESSORS_MODULES = []
 
 
-def multi_process_frame(source_path : str, temp_frame_paths : List[str], process_frames: Callable[[str, List[str], Any], None], update: Callable[[], None]) -> None:
-	with ThreadPoolExecutor(max_workers = facefusion.globals.execution_thread_count) as executor:
-		futures = []
-		queue = create_queue(temp_frame_paths)
-		queue_per_future = max(len(temp_frame_paths) // facefusion.globals.execution_thread_count * facefusion.globals.execution_queue_count, 1)
-		while not queue.empty():
-			future = executor.submit(process_frames, source_path, pick_queue(queue, queue_per_future), update)
-			futures.append(future)
-		for future in as_completed(futures):
-			future.result()
+def multi_process_frames(source_path : str, temp_frame_paths : List[str], process_frames : Process_Frames) -> None:
+	with tqdm(total = len(temp_frame_paths), desc = wording.get('processing'), unit = 'frame', ascii = ' =') as progress:
+		progress.set_postfix(
+		{
+			'execution_providers': encode_execution_providers(facefusion.globals.execution_providers),
+			'execution_thread_count': facefusion.globals.execution_thread_count,
+			'execution_queue_count': facefusion.globals.execution_queue_count
+		})
+		with ThreadPoolExecutor(max_workers = facefusion.globals.execution_thread_count) as executor:
+			futures = []
+			queue_temp_frame_paths : Queue[str] = create_queue(temp_frame_paths)
+			queue_per_future = max(len(temp_frame_paths) // facefusion.globals.execution_thread_count * facefusion.globals.execution_queue_count, 1)
+			while not queue_temp_frame_paths.empty():
+				payload_temp_frame_paths = pick_queue(queue_temp_frame_paths, queue_per_future)
+				future = executor.submit(process_frames, source_path, payload_temp_frame_paths, progress.update)
+				futures.append(future)
+			for future_done in as_completed(futures):
+				future_done.result()
 
 
 def create_queue(temp_frame_paths : List[str]) -> Queue[str]:
@@ -82,24 +94,3 @@ def pick_queue(queue : Queue[str], queue_per_future : int) -> List[str]:
 		if not queue.empty():
 			queues.append(queue.get())
 	return queues
-
-
-def process_video(source_path : str, frame_paths : List[str], process_frames : Callable[[str, List[str], Any], None]) -> None:
-	progress_bar_format = '{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]'
-	total = len(frame_paths)
-	with tqdm(total = total, desc = wording.get('processing'), unit = 'frame', dynamic_ncols = True, bar_format = progress_bar_format) as progress:
-		multi_process_frame(source_path, frame_paths, process_frames, lambda: update_progress(progress))
-
-
-def update_progress(progress : Any = None) -> None:
-	process = psutil.Process(os.getpid())
-	memory_usage = process.memory_info().rss / 1024 / 1024 / 1024
-	progress.set_postfix(
-	{
-		'memory_usage': '{:.2f}'.format(memory_usage).zfill(5) + 'GB',
-		'execution_providers': facefusion.globals.execution_providers,
-		'execution_thread_count': facefusion.globals.execution_thread_count,
-		'execution_queue_count': facefusion.globals.execution_queue_count
-	})
-	progress.refresh()
-	progress.update(1)
