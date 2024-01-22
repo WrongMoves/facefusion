@@ -31,7 +31,7 @@ python run.py [options]
 
 options:
   -h, --help                                                                                                         show this help message and exit
-  -s SOURCE_PATH, --source SOURCE_PATH                                                                               select a source image
+  -s SOURCE_PATHS, --source SOURCE_PATHS                                                                             select a source image
   -t TARGET_PATH, --target TARGET_PATH                                                                               select a target image or video
   -o OUTPUT_PATH, --output OUTPUT_PATH                                                                               specify the output file or directory
   -v, --version                                                                                                      show program's version number and exit
@@ -39,12 +39,16 @@ options:
 misc:
   --skip-download                                                                                                    omit automate downloads and lookups
   --headless                                                                                                         run the program in headless mode
+  --log-level {error,warn,info,debug}                                                                                choose from the available log levels
 
 execution:
-  --execution-providers {cpu} [{cpu} ...]                                                                            choose from the available execution providers
+  --execution-providers EXECUTION_PROVIDERS [EXECUTION_PROVIDERS ...]                                                choose from the available execution providers (choices: cpu, ...)
   --execution-thread-count [1-128]                                                                                   specify the number of execution threads
   --execution-queue-count [1-32]                                                                                     specify the number of execution queries
-  --max-memory [0-128]                                                                                               specify the maximum amount of ram to be used (in gb)
+
+memory:
+  --video-memory-strategy {strict,moderate,tolerant}                                                                 specify strategy to handle the video memory
+  --system-memory-limit [0-128]                                                                                      specify the amount (gb) of system memory to be used
 
 face analyser:
   --face-analyser-order {left-right,right-left,top-bottom,bottom-top,small-large,large-small,best-worst,worst-best}  specify the order used for the face analyser
@@ -61,31 +65,35 @@ face selector:
   --reference-frame-number REFERENCE_FRAME_NUMBER                                                                    specify the number of the reference frame
 
 face mask:
+  --face-mask-types FACE_MASK_TYPES [FACE_MASK_TYPES ...]                                                            choose from the available face mask types (choices: box, occlusion, region)
   --face-mask-blur [0.0-1.0]                                                                                         specify the blur amount for face mask
   --face-mask-padding FACE_MASK_PADDING [FACE_MASK_PADDING ...]                                                      specify the face mask padding (top, right, bottom, left) in percent
+  --face-mask-regions FACE_MASK_REGIONS [FACE_MASK_REGIONS ...]                                                      choose from the available face mask regions (choices: skin, left-eyebrow, right-eyebrow, left-eye, right-eye, eye-glasses, nose, mouth, upper-lip, lower-lip)
 
 frame extraction:
   --trim-frame-start TRIM_FRAME_START                                                                                specify the start frame for extraction
   --trim-frame-end TRIM_FRAME_END                                                                                    specify the end frame for extraction
-  --temp-frame-format {jpg,png}                                                                                      specify the image format used for frame extraction
+  --temp-frame-format {jpg,png,bmp}                                                                                  specify the image format used for frame extraction
   --temp-frame-quality [0-100]                                                                                       specify the image quality used for frame extraction
   --keep-temp                                                                                                        retain temporary frames after processing
 
 output creation:
   --output-image-quality [0-100]                                                                                     specify the quality used for the output image
   --output-video-encoder {libx264,libx265,libvpx-vp9,h264_nvenc,hevc_nvenc}                                          specify the encoder used for the output video
+  --output-video-preset {ultrafast,superfast,veryfast,faster,fast,medium,slow,slower,veryslow}                       specify the preset used for the output video
   --output-video-quality [0-100]                                                                                     specify the quality used for the output video
-  --keep-fps                                                                                                         preserve the frames per second (fps) of the target
+  --output-video-resolution OUTPUT_VIDEO_RESOLUTION                                                                  specify the resolution used for the output video
+  --output-video-fps OUTPUT_VIDEO_FPS                                                                                specify the frames per second (fps) used for the output video
   --skip-audio                                                                                                       omit audio from the target
 
 frame processors:
   --frame-processors FRAME_PROCESSORS [FRAME_PROCESSORS ...]                                                         choose from the available frame processors (choices: face_debugger, face_enhancer, face_swapper, frame_enhancer, ...)
-  --face-debugger-items {bbox,kps,face-mask,score} [{bbox,kps,face-mask,score} ...]                                  specify the face debugger items
+  --face-debugger-items FACE_DEBUGGER_ITEMS [FACE_DEBUGGER_ITEMS ...]                                                specify the face debugger items (choices: bbox, kps, face-mask, score)
   --face-enhancer-model {codeformer,gfpgan_1.2,gfpgan_1.3,gfpgan_1.4,gpen_bfr_256,gpen_bfr_512,restoreformer}        choose the model for the frame processor
-  --face-enhancer-blend [0-100]                                                                                      specify the blend factor for the frame processor
-  --face-swapper-model {blendface_256,inswapper_128,inswapper_128_fp16,simswap_256,simswap_512_unofficial}           choose the model for the frame processor
+  --face-enhancer-blend [0-100]                                                                                      specify the blend amount for the frame processor
+  --face-swapper-model {blendswap_256,inswapper_128,inswapper_128_fp16,simswap_256,simswap_512_unofficial}           choose the model for the frame processor
   --frame-enhancer-model {real_esrgan_x2plus,real_esrgan_x4plus,real_esrnet_x4plus}                                  choose the model for the frame processor
-  --frame-enhancer-blend [0-100]                                                                                     specify the blend factor for the frame processor
+  --frame-enhancer-blend [0-100]                                                                                     specify the blend amount for the frame processor
 
 uis:
   --ui-layouts UI_LAYOUTS [UI_LAYOUTS ...]                                                                           choose from the available ui layouts (choices: benchmark, webcam, default, ...)

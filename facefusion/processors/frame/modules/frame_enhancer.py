@@ -1,4 +1,4 @@
-from typing import Any, List, Dict, Literal, Optional
+from typing import Any, List, Literal, Optional
 from argparse import ArgumentParser
 import threading
 import cv2
@@ -7,11 +7,14 @@ from realesrgan import RealESRGANer
 
 import facefusion.globals
 import facefusion.processors.frame.core as frame_processors
-from facefusion import wording
+from facefusion import config, logger, wording
 from facefusion.face_analyser import clear_face_analyser
 from facefusion.content_analyser import clear_content_analyser
-from facefusion.typing import Frame, Face, Update_Process, ProcessMode, ModelValue, OptionsWithModel
-from facefusion.utilities import conditional_download, resolve_relative_path, is_file, is_download_done, map_device, create_metavar, update_status
+from facefusion.typing import Face, FaceSet, Frame, Update_Process, ProcessMode, ModelSet, OptionsWithModel
+from facefusion.common_helper import create_metavar
+from facefusion.execution_helper import map_torch_backend
+from facefusion.filesystem import is_file, resolve_relative_path
+from facefusion.download import conditional_download, is_download_done
 from facefusion.vision import read_image, read_static_image, write_image
 from facefusion.processors.frame import globals as frame_processors_globals
 from facefusion.processors.frame import choices as frame_processors_choices
@@ -19,8 +22,8 @@ from facefusion.processors.frame import choices as frame_processors_choices
 FRAME_PROCESSOR = None
 THREAD_SEMAPHORE : threading.Semaphore = threading.Semaphore()
 THREAD_LOCK : threading.Lock = threading.Lock()
-NAME = 'FACEFUSION.FRAME_PROCESSOR.FRAME_ENHANCER'
-MODELS: Dict[str, ModelValue] =\
+NAME = __name__.upper()
+MODELS : ModelSet =\
 {
 	'real_esrgan_x2plus':
 	{
@@ -58,7 +61,7 @@ def get_frame_processor() -> Any:
 					num_out_ch = 3,
 					scale = model_scale
 				),
-				device = map_device(facefusion.globals.execution_providers),
+				device = map_torch_backend(facefusion.globals.execution_providers),
 				scale = model_scale
 			)
 	return FRAME_PROCESSOR
@@ -88,8 +91,8 @@ def set_options(key : Literal['model'], value : Any) -> None:
 
 
 def register_args(program : ArgumentParser) -> None:
-	program.add_argument('--frame-enhancer-model', help = wording.get('frame_processor_model_help'), dest = 'frame_enhancer_model', default = 'real_esrgan_x2plus', choices = frame_processors_choices.frame_enhancer_models)
-	program.add_argument('--frame-enhancer-blend', help = wording.get('frame_processor_blend_help'), dest = 'frame_enhancer_blend', type = int, default = 80, choices = frame_processors_choices.frame_enhancer_blend_range, metavar = create_metavar(frame_processors_choices.frame_enhancer_blend_range))
+	program.add_argument('--frame-enhancer-model', help = wording.get('frame_processor_model_help'), default = config.get_str_value('frame_processors.frame_enhancer_model', 'real_esrgan_x2plus'), choices = frame_processors_choices.frame_enhancer_models)
+	program.add_argument('--frame-enhancer-blend', help = wording.get('frame_processor_blend_help'), type = int, default = config.get_int_value('frame_processors.frame_enhancer_blend', '80'), choices = frame_processors_choices.frame_enhancer_blend_range, metavar = create_metavar(frame_processors_choices.frame_enhancer_blend_range))
 
 
 def apply_args(program : ArgumentParser) -> None:
@@ -106,26 +109,32 @@ def pre_check() -> bool:
 	return True
 
 
-def pre_process(mode : ProcessMode) -> bool:
+def post_check() -> bool:
 	model_url = get_options('model').get('url')
 	model_path = get_options('model').get('path')
 	if not facefusion.globals.skip_download and not is_download_done(model_url, model_path):
-		update_status(wording.get('model_download_not_done') + wording.get('exclamation_mark'), NAME)
+		logger.error(wording.get('model_download_not_done') + wording.get('exclamation_mark'), NAME)
 		return False
 	elif not is_file(model_path):
-		update_status(wording.get('model_file_not_present') + wording.get('exclamation_mark'), NAME)
+		logger.error(wording.get('model_file_not_present') + wording.get('exclamation_mark'), NAME)
 		return False
+	return True
+
+
+def pre_process(mode : ProcessMode) -> bool:
 	if mode == 'output' and not facefusion.globals.output_path:
-		update_status(wording.get('select_file_or_directory_output') + wording.get('exclamation_mark'), NAME)
+		logger.error(wording.get('select_file_or_directory_output') + wording.get('exclamation_mark'), NAME)
 		return False
 	return True
 
 
 def post_process() -> None:
-	clear_frame_processor()
-	clear_face_analyser()
-	clear_content_analyser()
 	read_static_image.cache_clear()
+	if facefusion.globals.video_memory_strategy == 'strict' or facefusion.globals.video_memory_strategy == 'moderate':
+		clear_frame_processor()
+	if facefusion.globals.video_memory_strategy == 'strict':
+		clear_face_analyser()
+		clear_content_analyser()
 
 
 def enhance_frame(temp_frame : Frame) -> Frame:
@@ -143,11 +152,15 @@ def blend_frame(temp_frame : Frame, paste_frame : Frame) -> Frame:
 	return temp_frame
 
 
-def process_frame(source_face : Face, reference_face : Face, temp_frame : Frame) -> Frame:
+def get_reference_frame(source_face : Face, target_face : Face, temp_frame : Frame) -> Frame:
+	pass
+
+
+def process_frame(source_face : Face, reference_faces : FaceSet, temp_frame : Frame) -> Frame:
 	return enhance_frame(temp_frame)
 
 
-def process_frames(source_path : str, temp_frame_paths : List[str], update_progress : Update_Process) -> None:
+def process_frames(source_paths : List[str], temp_frame_paths : List[str], update_progress : Update_Process) -> None:
 	for temp_frame_path in temp_frame_paths:
 		temp_frame = read_image(temp_frame_path)
 		result_frame = process_frame(None, None, temp_frame)
@@ -155,11 +168,11 @@ def process_frames(source_path : str, temp_frame_paths : List[str], update_progr
 		update_progress()
 
 
-def process_image(source_path : str, target_path : str, output_path : str) -> None:
+def process_image(source_paths : List[str], target_path : str, output_path : str) -> None:
 	target_frame = read_static_image(target_path)
 	result = process_frame(None, None, target_frame)
 	write_image(output_path, result)
 
 
-def process_video(source_path : str, temp_frame_paths : List[str]) -> None:
+def process_video(source_paths : List[str], temp_frame_paths : List[str]) -> None:
 	frame_processors.multi_process_frames(None, temp_frame_paths, process_frames)
